@@ -1,14 +1,35 @@
+"""
+parser.py
+Input: push notification text (str)
+Output: list[dict] normalized transactions with keys:
+  datetime, amount, merchant, category, source, payment_method, raw_text
+"""
+
 import re
 from datetime import datetime
 
-def parse_push_notification(text: str) -> dict:
+
+def _normalize_tx(tx: dict, raw_text: str) -> dict:
+    """
+    Normalize parsed transaction dict to a fixed schema.
+    """
+    return {
+        "datetime": tx.get("datetime"),
+        "amount": float(tx.get("amount", 0)),
+        "merchant": tx.get("merchant") or tx.get("store") or tx.get("place"),
+        "category": tx.get("category"),
+        "source": tx.get("source"),                 # 아직 없으면 None
+        "payment_method": tx.get("payment_method"), # 아직 없으면 None
+        "raw_text": raw_text,
+    }
+
+
+def parse_push_notification(text: str) -> list[dict]:
     """
     Parse various card/KakaoPay/Pay-style payment push notifications.
 
-    Extracts:
-        - store (str)
-        - amount (int)
-        - datetime (datetime)
+    Returns:
+        list[dict] of normalized transactions (empty list if nothing parsed)
     """
     try:
         # 금액 추출
@@ -29,17 +50,10 @@ def parse_push_notification(text: str) -> dict:
         else:
             dt = datetime.now()
 
-        return {
-            "store": store,
-            "amount": amount,
-            "datetime": dt
-        }
+        tx = {"store": store, "amount": amount, "datetime": dt}
+        return [_normalize_tx(tx, raw_text=text)]
 
     except Exception as e:
         print("[ParserError]", e)
-        return {
-            "store": "알수없음",
-            "amount": 0,
-            "datetime": datetime.now()
-        }
-
+        return []
+   

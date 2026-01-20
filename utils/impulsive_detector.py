@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import Optional
 
 class ImpulsiveDetector:
     """
@@ -37,3 +38,49 @@ class ImpulsiveDetector:
 
         return impulsive_score
 
+
+def detect_impulsive(transactions, detector: Optional["ImpulsiveDetector"] = None) -> dict:
+    """
+    transactions: list[dict] (parser normalized schema)
+      expected keys: datetime, amount, merchant, ...
+    returns:
+      {"impulsive_score": float, "impulsive_flags": list}
+    """
+    # ✅ Input guard
+    if not transactions:
+        return {"impulsive_score": 0.0, "impulsive_flags": []}
+    if isinstance(transactions, dict):
+        transactions = [transactions]
+    transactions = [tx for tx in transactions if isinstance(tx, dict)]
+    if not transactions:
+        return {"impulsive_score": 0.0, "impulsive_flags": []}
+
+    detector = detector or ImpulsiveDetector()
+
+    scores = []
+    flags = []
+
+    for tx in transactions:
+        dt = tx.get("datetime")
+        amt = tx.get("amount", 0)
+
+        if not isinstance(dt, datetime):
+            continue
+        try:
+            amt_int = int(amt)
+        except Exception:
+            continue
+
+        s = detector.compute_score(dt, amt_int)
+        scores.append(s)
+
+        if s >= 0.7:
+            flags.append({
+                "datetime": dt,
+                "amount": amt_int,
+                "merchant": tx.get("merchant"),
+                "score": s
+            })
+
+    final_score = round(sum(scores) / len(scores), 2) if scores else 0.0
+    return {"impulsive_score": final_score, "impulsive_flags": flags}
