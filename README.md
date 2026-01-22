@@ -1,3 +1,10 @@
+## Supported Push Formats (Week2)
+- Sources: shinhan / kakaopay / kb / samsung (fallback: unknown)
+- Output schema: datetime, amount(+), merchant, category, source, payment_method, raw_text
+- Run demo: `python main.py`
+- Run tests: `python demo_pages/check_week1_cases.py`, `python demo_pages/check_category_rules.py`, `python demo_pages/check_extremes.py`
+
+
 # Team 이루리 | AI 기반 청년 금융 케어 서비스: FINNUT
 
 이 저장소는 이화여자대학교 졸업프로젝트 스타트 수업 (2025 Fall)을 위한
