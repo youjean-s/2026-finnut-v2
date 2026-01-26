@@ -31,6 +31,72 @@ CASES = [
         "expect_source": "unknown",
         "expect_category": "쇼핑",
     },
+
+    {
+        "name": "shinhan_amount_no_comma",
+        "text": "[신한카드 승인] 5800원\nGS25 이대점\n일시불 승인\n2024-11-21 23:10",
+        "expect_source": "shinhan",
+        "expect_payment": "card",
+        "expect_category": "편의점",
+    },
+    {
+        "name": "shinhan_merchant_parentheses",
+        "text": "[신한카드 승인] 6,500원\n스타벅스(강남역)\n일시불 승인\n2024-11-22 08:15",
+        "expect_source": "shinhan",
+        "expect_payment": "card",
+        "expect_category": "카페",
+    },
+    {
+        "name": "shinhan_hyphen_merchant",
+        "text": "[신한카드 승인] 2,200원\nGS25-대치점\n일시불 승인\n2024-11-22 09:01",
+        "expect_source": "shinhan",
+        "expect_payment": "card",
+        "expect_category": "편의점",
+    },
+
+    {
+        "name": "kakaopay_amount_no_comma",
+        "text": "카카오페이\n메가커피\n2025-01-03 09:10\n2500원",
+        "expect_source": "kakaopay",
+        "expect_payment": "wallet",
+        "expect_category": "카페",
+    },
+    {
+        "name": "kakaopay_shopping",
+        "text": "카카오페이\n무신사\n2025-01-03 21:10\n15,000원",
+        "expect_source": "kakaopay",
+        "expect_payment": "wallet",
+        "expect_category": "쇼핑",
+    },
+
+    # unknown source: still categorize by merchant text
+    {
+        "name": "unknown_convenience",
+        "text": "승인\nCU 이대점\n2025-01-04 00:10\n1,200원",
+        "expect_source": "unknown",
+        "expect_category": "편의점",
+    },
+    {
+        "name": "unknown_cafe",
+        "text": "승인\n이디야커피\n2025-01-04 10:02\n3,300원",
+        "expect_source": "unknown",
+        "expect_category": "카페",
+    },
+
+    # extreme-ish amount (still should parse)
+    {
+        "name": "unknown_extreme_large_amount",
+        "text": "승인\n현대백화점\n2025-01-04 15:44\n5,000,000원",
+        "expect_source": "unknown",
+        "expect_category": "쇼핑",
+    },
+    {
+        "name": "unknown_small_amount",
+        "text": "승인\nGS25 이대점\n2025-01-04 07:05\n100원",
+        "expect_source": "unknown",
+        "expect_category": "편의점",
+    },
+
 ]
 
 
