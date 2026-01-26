@@ -1,6 +1,6 @@
 from utils.parser import parse_push_notification
 from utils.category_rules import categorize_store
-from utils.fhi_calculator import calculate_fhi_from_transactions
+from utils.fhi_calculator import calculate_fhi_from_transactions, compare_rule_vs_ml
 from mock.push_emulator import get_random_push
 
 
@@ -13,7 +13,7 @@ def main():
     print(push)
     print("--------------------------------------------------")
 
-    # 2. 파싱 (✅ 이제 list[dict] 반환)
+    # 2. 파싱 (list[dict] 반환)
     txs = parse_push_notification(push)
     tx = txs[0] if txs else None
     if not tx:
@@ -33,8 +33,11 @@ def main():
     # 3. 카테고리 분류
     category = categorize_store(store)
 
-    # 4~6. 충동/급증/FHI 계산 (✅ 통합 함수 사용)
-    result = calculate_fhi_from_transactions(txs)
+    # txs 안의 tx에도 category를 넣어줘야 ML feature_builder가 쓸 수 있음
+    tx["category"] = category
+
+    # 4~6. 충동/급증/FHI 계산 (Rule)
+    result = calculate_fhi_from_transactions(txs, mode="rule")
     impulsive_score = result["impulsive"]["impulsive_score"]
     spike_score = result["spike"]["spike_score"]
     fhi = result["fhi"]
@@ -44,8 +47,17 @@ def main():
     print(f"- 충동구매 점수: {impulsive_score}")
     print(f"- 급증 감지: {spike_score}")
 
-    print("\n FHI")
+    print("\n FHI (Rule)")
     print(f"- 이번 소비 반영 후 FHI: {fhi}점")
+
+    # Rule vs ML 비교 출력
+    cmp = compare_rule_vs_ml(txs)
+
+    print("\n Rule vs ML 비교")
+    print(f"- RULE FHI: {cmp['rule']['fhi']}")
+    print(f"- ML   FHI: {cmp['ml']['fhi']}")
+    print(f"- DELTA  : {cmp['delta']}")
+
     print("\n==================================================\n")
 
 
