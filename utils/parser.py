@@ -34,11 +34,17 @@ def _normalize_tx(tx: dict, raw_text: str) -> dict:
     merchant = tx.get("merchant") or tx.get("store") or tx.get("place") or "알수없음"
 
     # amount는 무조건 float(+지출). 변환 실패하면 0.0
+       # amount는 무조건 int(+지출). 변환 실패하면 0
     amt = tx.get("amount", 0)
     try:
-        amount = float(amt)
+        # int/float/str 모두 대응
+        if isinstance(amt, str):
+            s = amt.replace(",", "").replace("원", "").replace("₩", "").strip()
+            amount = int(float(s)) if s else 0
+        else:
+            amount = int(float(amt))
     except Exception:
-        amount = 0.0
+        amount = 0
 
     return {
         "datetime": tx.get("datetime"),   # parser에서 datetime으로 맞춰주고 있음
