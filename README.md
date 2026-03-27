@@ -1,8 +1,10 @@
-## Supported Push Formats (Week2)
-- Sources: shinhan / kakaopay / kb / samsung (fallback: unknown)
-- Output schema: datetime, amount(+), merchant, category, source, payment_method, raw_text
-- Run demo: `python main.py`
-- Run tests: `python demo_pages/check_week1_cases.py`, `python demo_pages/check_category_rules.py`, `python demo_pages/check_extremes.py`
+## 지원하는 푸시 알림 형식
+
+- **지원 소스**: shinhan / kakaopay / kb / samsung (미지원 시: unknown 처리)
+- **출력 스키마**: datetime, amount(+), merchant, category, source, payment_method, raw_text
+- **데모 실행**: `python main.py`
+- **테스트 실행**: `python demo_pages/check_week1_cases.py`, `python demo_pages/check_category_rules.py`, `python demo_pages/check_extremes.py`
+
 
 
 # Team 이루리 | AI 기반 청년 금융 케어 서비스: FINNUT

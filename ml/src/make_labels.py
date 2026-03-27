@@ -9,7 +9,7 @@ def clamp(x, lo=0.0, hi=100.0):
 def main():
     df = pd.read_csv(IN_PATH)
 
-    # ✅ label = rule-based proxy (no ground truth)
+    # label = rule-based proxy (no ground truth)
     # 간단 proxy:
     # - spend_trend: spend_sum_7d vs spend_sum_30d (ratio)
     # - night/small/repeat 같은 건 아직 features에 없으니 우선 spend 패턴 기반으로만 시작
