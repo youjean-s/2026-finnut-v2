@@ -1,0 +1,29 @@
+{
+  "overall": {
+    "rule_mae": 0.0,
+    "rule_rmse": 0.0,
+    "ml_mae": 0.1573,
+    "ml_rmse": 0.5929,
+    "mae_improvement": -0.1573
+  },
+  "scenarios": {
+    "normal": {
+      "n": 48561,
+      "rule_mae": 0.0,
+      "ml_mae": 0.0542,
+      "delta_mae": -0.0542
+    },
+    "s2_event_spike": {
+      "n": 17703,
+      "rule_mae": 0.0,
+      "ml_mae": 0.4332,
+      "delta_mae": -0.4332
+    },
+    "s3_gradual_increase": {
+      "n": 11633,
+      "rule_mae": 0.0,
+      "ml_mae": 0.1683,
+      "delta_mae": -0.1683
+    }
+  }
+}

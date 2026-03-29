@@ -1,0 +1,9 @@
+{
+  "mae": 0.17357317975734965,
+  "rmse": 0.5905857260286339,
+  "n_train_rows": 325052,
+  "n_val_rows": 77897,
+  "n_features": 20,
+  "model_out": "ml/artifacts/models/lgbm_fhi_v2_baseline.txt",
+  "fi_out": "ml/artifacts/reports/feature_importance.csv"
+}

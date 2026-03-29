@@ -1,0 +1,36 @@
+{
+  "overall": {
+    "rule_mae_vs_ideal": 3.683,
+    "ml_mae_vs_ideal": 3.7743,
+    "mae_improvement": -0.0913
+  },
+  "scenarios": {
+    "normal": {
+      "n": 48561,
+      "rule_fhi_mean": 98.84,
+      "ml_fhi_mean": 98.85,
+      "ideal_fhi_mean": 94.7,
+      "rule_mae_vs_ideal": 4.1366,
+      "ml_mae_vs_ideal": 4.1762,
+      "ml_wins": false
+    },
+    "s2_event_spike": {
+      "n": 17703,
+      "rule_fhi_mean": 89.78,
+      "ml_fhi_mean": 89.77,
+      "ideal_fhi_mean": 88.2,
+      "rule_mae_vs_ideal": 1.5735,
+      "ml_mae_vs_ideal": 1.9235,
+      "ml_wins": false
+    },
+    "s3_gradual_increase": {
+      "n": 11633,
+      "rule_fhi_mean": 99.38,
+      "ml_fhi_mean": 99.29,
+      "ideal_fhi_mean": 94.38,
+      "rule_mae_vs_ideal": 5.0,
+      "ml_mae_vs_ideal": 4.913,
+      "ml_wins": true
+    }
+  }
+}

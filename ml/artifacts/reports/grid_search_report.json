@@ -1,0 +1,15 @@
+{
+  "best": {
+    "mae": 0.13495518114635405,
+    "rmse": 0.5899764865484903,
+    "params": {
+      "num_leaves": 127,
+      "learning_rate": 0.05,
+      "subsample": 0.7,
+      "colsample_bytree": 0.9,
+      "min_child_samples": 20,
+      "n_estimators": 800
+    }
+  },
+  "n_trials": 144
+}
