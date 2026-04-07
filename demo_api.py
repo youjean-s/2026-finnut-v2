@@ -66,27 +66,73 @@ def build_demo_transactions():
     return txs'''
     #demo only 
 
-def safe_generate_card(fhi, features, impulsive_score, spike_score, current_titles=None):
+def pick_fallback_card(fhi, current_titles=None, variation="control"):
     current_titles = current_titles or []
+
+    variation_keywords = {
+        "control": ["쉬어가기", "미루기"],
+        "substitute": ["써보기", "바꾸기"],
+        "checklist": ["살펴보기", "보기", "확인하기"],
+    }
+
+    preferred = variation_keywords.get(variation, [])
+
+    candidates = [c for c in FALLBACK_CARDS if c["title"] not in current_titles]
+    if not candidates:
+        candidates = FALLBACK_CARDS[:]
+
+    # variation에 맞는 fallback 우선 선택
+    filtered = [
+        c for c in candidates
+        if any(keyword in c["mission"] or keyword in c["title"] for keyword in preferred)
+    ]
+    if filtered:
+        candidates = filtered
+
+    card = random.choice(candidates).copy()
+    card["fhi"] = fhi
+    card["grade"] = "양호 🟢" if fhi >= 80 else "주의 🟡" if fhi >= 60 else "위험 🔴"
+    card["raw"] = "fallback"
+    return card
+
+
+def safe_generate_card(
+    fhi,
+    features,
+    impulsive_score,
+    spike_score,
+    current_titles=None,
+    variation="control",
+):
+    current_titles = current_titles or []
+
+    banned_keywords = []
+    if variation == "control":
+        banned_keywords = ["예산", "기록장", "관리", "통제"]
+    elif variation == "substitute":
+        banned_keywords = ["줄이기", "멈추기", "차단"]
+    elif variation == "checklist":
+        banned_keywords = ["대신", "대체", "예산"]
+
     try:
         card = generate_coaching_card(
             fhi=fhi,
             features=features,
             impulsive_score=impulsive_score,
             spike_score=spike_score,
+            variation=variation,
+            banned_titles=current_titles,
+            banned_keywords=banned_keywords,
         )
         if not card.get("title"):
             raise ValueError("빈 카드 생성")
         return card
     except Exception:
-        candidates = [c for c in FALLBACK_CARDS if c["title"] not in current_titles]
-        if not candidates:
-            candidates = FALLBACK_CARDS
-        card = random.choice(candidates).copy()
-        card["fhi"] = fhi
-        card["grade"] = "양호 🟢" if fhi >= 80 else "주의 🟡" if fhi >= 60 else "위험 🔴"
-        card["raw"] = "fallback"
-        return card
+        return pick_fallback_card(
+            fhi=fhi,
+            current_titles=current_titles,
+            variation=variation,
+        )
 
 @app.get("/")
 def root():
@@ -103,15 +149,19 @@ def demo_home():
     impulsive_score = result["impulsive"].get("impulsive_score", 0.0)
     spike_score = result["spike"].get("spike_score", 0.0)
 
+    variations = ["control", "substitute", "checklist"]
+
     cards = []
     current_titles = []
-    for _ in range(3):
+
+    for variation in variations:
         card = safe_generate_card(
             fhi=fhi,
             features=features,
             impulsive_score=impulsive_score,
             spike_score=spike_score,
-            current_titles=current_titles
+            current_titles=current_titles,
+            variation=variation,
         )
         current_titles.append(card["title"])
         cards.append(card)
@@ -125,13 +175,19 @@ def demo_home():
         "cards": cards
     }
 
+
 @app.post("/demo/refresh-card")
 def refresh_card(req: RefreshRequest):
+    # refresh 때도 이미 있는 카드들과 겹치지 않도록
+    # 랜덤하게 variation 하나 골라 새 카드 생성
+    variation = random.choice(["control", "substitute", "checklist"])
+
     card = safe_generate_card(
         fhi=req.fhi,
         features=req.features,
         impulsive_score=req.impulsive_score,
         spike_score=req.spike_score,
-        current_titles=req.current_titles
+        current_titles=req.current_titles,
+        variation=variation,
     )
-    return card 
+    return card
