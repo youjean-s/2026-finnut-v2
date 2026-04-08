@@ -117,7 +117,7 @@ def root():
     return {"message": "FINNUT demo API running"}
 
 
-@app.post("/demo/home")
+@app.get("/demo/home")
 def demo_home():
     txs = build_demo_transactions()
 
