@@ -99,6 +99,7 @@ def _safe_generate_card(
             features=features,
             impulsive_score=impulsive_score,
             spike_score=spike_score,
+            current_titles=current_titles,
         )
         if not card.get("title"):
             raise ValueError("빈 카드")
