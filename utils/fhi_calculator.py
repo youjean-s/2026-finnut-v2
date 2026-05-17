@@ -1,4 +1,5 @@
-from turtle import mode
+#from turtle import mode
+from typing import Optional
 from ml.ml_runtime.feature_builder import build_features_from_transactions
 from ml.ml_runtime.model_loader import FHIModel
 from ml.ml_runtime.feature_builder import build_features_from_transactions
@@ -19,7 +20,8 @@ def calculate_fhi(impulsive: float, spike: float) -> float:
 from utils.impulsive_detector import detect_impulsive
 from utils.spending_spike import detect_spending_spike
 
-def calculate_fhi_from_transactions(transactions, mode: str = "rule", model: FHIModel | None = None) -> dict:
+#def calculate_fhi_from_transactions(transactions, mode: str = "rule", model: FHIModel | None = None) -> dict:
+def calculate_fhi_from_transactions(transactions, mode: str = "rule", model: Optional[FHIModel] = None) -> dict:
     """
     transactions: list[dict] normalized by parser
     returns:
