@@ -8,15 +8,15 @@ import pandas as pd
 # val.csv 의 고정 카테고리 컬럼명과 매핑
 # key: 학습 feature 컬럼명, value: 실제 거래 category 값
 CATEGORY_COLS = {
+    "cat_spend_ratio_convenience_30d":   "convenience",
+    "cat_spend_ratio_cafe_30d":          "cafe",
+    "cat_spend_ratio_food_30d":          "food",
+    "cat_spend_ratio_transport_30d":     "transport",
+    "cat_spend_ratio_shopping_30d":      "shopping",
+    "cat_spend_ratio_housing_30d":       "housing",
     "cat_spend_ratio_entertainment_30d": "entertainment",
-    "cat_spend_ratio_gas_transport_30d": "gas_transport",
-    "cat_spend_ratio_grocery_pos_30d":   "grocery_pos",
-    "cat_spend_ratio_home_30d":          "home",
-    "cat_spend_ratio_kids_pets_30d":     "kids_pets",
-    "cat_spend_ratio_misc_net_30d":      "misc_net",
+    "cat_spend_ratio_subscription_30d":  "subscription",
     "cat_spend_ratio_other_30d":         "other",
-    "cat_spend_ratio_shopping_pos_30d":  "shopping_pos",
-    "cat_spend_ratio_shopping_net_30d":  "shopping_net",
 }
 
 
