@@ -2,6 +2,7 @@
 fastapi
 uvicorn[standard]
 pydantic
+python-multipart
 
 # ── DB / Env ──
 python-dotenv
@@ -27,3 +28,4 @@ lxml==4.9.3
 
 # ── Demo UI (선택) ──
 # streamlit==1.32.0   # 필요 시 주석 해제
+

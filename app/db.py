@@ -160,6 +160,39 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS ix_elig_age ON policy_eligibility(min_age, max_age);")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_elig_student ON policy_eligibility(student_required);")
 
+    # =========================================================
+    # 5) mission_logs / mission_executions 테이블 (미션 실행 로그)
+    # =========================================================
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS mission_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            card_title TEXT NOT NULL,
+            card_mission TEXT NOT NULL,   -- 코칭카드 원문 미션 문구
+            category TEXT NOT NULL,       -- convenience/cafe/food/... (fhi.py VALID_CATEGORIES 재사용)
+            target_count INTEGER NOT NULL,
+            current_count INTEGER DEFAULT 0,
+            period_start TEXT NOT NULL,   -- ISO date
+            period_end TEXT NOT NULL,     -- ISO date
+            status TEXT DEFAULT 'active', -- active / completed / failed
+            created_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_mission_logs_user ON mission_logs(user_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_mission_logs_status ON mission_logs(status);")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS mission_executions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mission_log_id INTEGER NOT NULL,
+            photo_path TEXT NOT NULL,
+            note TEXT,
+            executed_at TEXT,
+            FOREIGN KEY(mission_log_id) REFERENCES mission_logs(id) ON DELETE CASCADE
+        );
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_mission_exec_mission ON mission_executions(mission_log_id);")
     conn.commit()
     conn.close()
 

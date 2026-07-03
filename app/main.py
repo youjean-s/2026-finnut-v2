@@ -8,6 +8,7 @@ from app.routers.users import router as users_router
 from app.routers.eligibility import router as eligibility_router
 from app.routers.user_recommendations import router as user_recommendations_router
 from app.routers.fhi import router as fhi_router
+from app.routers.missions import router as missions_router
 
 app = FastAPI(
     title="FINNUT Backend",
@@ -41,3 +42,4 @@ app.include_router(user_recommendations_router)
 
 # FHI 분석
 app.include_router(fhi_router)
+app.include_router(missions_router)
