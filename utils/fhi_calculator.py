@@ -11,11 +11,9 @@ Output: {"fhi": float, "impulsive": dict, "spike": dict}
 
 
 def calculate_fhi(impulsive: float, spike: float) -> float:
-    """
-    금융건강지수(FHI) = 100 - (충동구매*40 + 급증*30)
-    """
-    score = 100 - (impulsive * 40 + max(0, spike) * 30)
-    return round(max(score, 0), 2)
+    spike_normalized = spike if spike <= 1.0 else 1.0
+    fhi = (1 - impulsive) * 50 + (1 - spike_normalized) * 50
+    return round(max(fhi, 0), 2)
 
 from utils.impulsive_detector import detect_impulsive
 from utils.spending_spike import detect_spending_spike

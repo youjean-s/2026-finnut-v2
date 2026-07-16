@@ -192,10 +192,57 @@ def init_db():
             FOREIGN KEY(mission_log_id) REFERENCES mission_logs(id) ON DELETE CASCADE
         );
     """)
+    # 기존 DB 마이그레이션: 인증 방식 관련 컬럼 추가
+    mission_log_migration_cols = {
+        "verification_type": "TEXT",        # 'photo' / 'transaction'
+        "verification_keywords": "TEXT",    # 배달앱 이름 등, JSON 배열 문자열
+    }
+    for col, col_type in mission_log_migration_cols.items():
+        if not _column_exists(conn, "mission_logs", col):
+            cur.execute(f"ALTER TABLE mission_logs ADD COLUMN {col} {col_type};")
+            print(f"[db] mission_logs.{col} 컬럼 추가 완료 (마이그레이션)")
+
+    mission_exec_migration_cols = {
+        "verified": "INTEGER",              # 0/1, NULL=검증 전
+        "verification_reason": "TEXT",
+        "confidence": "TEXT",               # high/medium/low
+    }
+    for col, col_type in mission_exec_migration_cols.items():
+        if not _column_exists(conn, "mission_executions", col):
+            cur.execute(f"ALTER TABLE mission_executions ADD COLUMN {col} {col_type};")
+            print(f"[db] mission_executions.{col} 컬럼 추가 완료 (마이그레이션)")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_mission_exec_mission ON mission_executions(mission_log_id);")
+
+    # =========================================================
+    # 6) transactions 테이블 (Android Room DB → 백엔드 동기화)
+    # =========================================================
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            tx_datetime TEXT NOT NULL,   -- ISO datetime, parser.py의 'datetime' 필드
+            amount INTEGER NOT NULL,
+            merchant TEXT NOT NULL,
+            category TEXT,
+            source TEXT,                 -- kakaopay/shinhan/kb/samsung/...
+            payment_method TEXT,
+            raw_text TEXT,
+            synced_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_tx_user ON transactions(user_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_tx_datetime ON transactions(tx_datetime);")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_tx_merchant ON transactions(merchant);")
+
+    # 중복 동기화 방지용 (같은 유저의 같은 거래가 여러 번 sync 안 되도록)
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_tx_dedup
+        ON transactions(user_id, tx_datetime, amount, merchant);
+    """)
+    
     conn.commit()
     conn.close()
-
 
 def now_iso():
     return datetime.now().isoformat(timespec="seconds")

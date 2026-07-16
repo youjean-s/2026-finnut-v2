@@ -6,6 +6,7 @@ app/routers/missions.py
 
 import os
 import uuid
+import json
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -13,6 +14,20 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
 
 from app.db import get_conn, now_iso
+
+CATEGORY_TO_VERIFICATION = {
+    "배달/식비": "transaction",
+    # 나머지는 전부 photo (기본값)
+}
+
+CATEGORY_KEYWORDS = {
+    "배달/식비": ["배달의민족", "배민", "요기요", "쿠팡이츠"],
+}
+
+def resolve_verification(category: str):
+    v_type = CATEGORY_TO_VERIFICATION.get(category, "photo")
+    keywords = CATEGORY_KEYWORDS.get(category)
+    return v_type, keywords
 
 router = APIRouter(tags=["missions"])
 
@@ -49,15 +64,18 @@ def _row_to_dict(r) -> Dict[str, Any]:
         "period_start": r["period_start"],
         "period_end": r["period_end"],
         "status": r["status"],
+        "verification_type": r["verification_type"],
+        "verification_keywords": r["verification_keywords"],
         "created_at": r["created_at"],
     }
-
 
 @router.post("/missions/create")
 def create_mission(body: MissionCreate) -> Dict[str, Any]:
     """코칭카드의 미션을 '수락'해서 실행 로그 대상으로 저장"""
     if body.category not in VALID_CATEGORIES:
         raise HTTPException(status_code=400, detail=f"category는 {VALID_CATEGORIES} 중 하나여야 합니다.")
+
+    verification_type, verification_keywords = resolve_verification(body.category)
 
     today = datetime.now().date()
     period_start = today.isoformat()
@@ -68,10 +86,13 @@ def create_mission(body: MissionCreate) -> Dict[str, Any]:
     cur.execute(
         """INSERT INTO mission_logs
            (user_id, card_title, card_mission, category, target_count,
-            current_count, period_start, period_end, status, created_at)
-           VALUES (?, ?, ?, ?, ?, 0, ?, ?, 'active', ?)""",
+            current_count, period_start, period_end, status,
+            verification_type, verification_keywords, created_at)
+           VALUES (?, ?, ?, ?, ?, 0, ?, ?, 'active', ?, ?, ?)""",
         (body.user_id, body.card_title, body.card_mission, body.category,
-         body.target_count, period_start, period_end, now_iso()),
+         body.target_count, period_start, period_end,
+         verification_type, json.dumps(verification_keywords) if verification_keywords else None,
+         now_iso()),
     )
     mission_id = cur.lastrowid
     conn.commit()
