@@ -7,6 +7,9 @@ python-multipart
 # ── DB / Env ──
 python-dotenv
 
+# ── Test ──
+pytest
+
 # ── HTTP ──
 requests==2.31.0
 
@@ -14,6 +17,8 @@ requests==2.31.0
 numpy==1.26.0
 pandas==2.1.2
 lightgbm
+scikit-learn
+joblib
 
 # ── OpenAI (코칭카드) ──
 openai
