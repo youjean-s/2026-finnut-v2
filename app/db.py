@@ -127,6 +127,9 @@ def init_db():
         "birthdate": "TEXT",
         "income_level": "INTEGER",
         "school": "TEXT",
+        "kakao_id": "TEXT",
+        "finnut_id": "TEXT",
+        "acorn_balance": "INTEGER DEFAULT 0",
     }
     for col, col_type in migration_cols.items():
         if not _column_exists(conn, "users", col):
@@ -136,6 +139,8 @@ def init_db():
     # category_preference 제거는 SQLite가 DROP COLUMN 미지원이라 그냥 둠
     cur.execute("CREATE INDEX IF NOT EXISTS ix_users_region ON users(region);")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_users_school ON users(school);")
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_kakao_id ON users(kakao_id);")
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_finnut_id ON users(finnut_id);")
 
     # =========================================================
     # 4) policy_eligibility 테이블
@@ -240,9 +245,103 @@ def init_db():
         CREATE UNIQUE INDEX IF NOT EXISTS uq_tx_dedup
         ON transactions(user_id, tx_datetime, amount, merchant);
     """)
-    
+
+    # =========================================================
+    # 7) friend_requests 테이블
+    # =========================================================
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS friend_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id INTEGER NOT NULL,
+            receiver_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',   -- pending | accepted | rejected
+            created_at TEXT,
+            updated_at TEXT,
+            FOREIGN KEY(sender_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(receiver_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_freq_receiver ON friend_requests(receiver_id, status);")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_freq_sender ON friend_requests(sender_id, status);")
+    # 같은 두 사람 사이에 pending 요청 중복 방지용 (재요청은 상태 바뀐 후에만)
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_freq_pending_pair
+        ON friend_requests(sender_id, receiver_id, status)
+        WHERE status = 'pending';
+    """)
+
+    # =========================================================
+    # 8) friendships 테이블 (수락 시 양방향 2행 insert)
+    # =========================================================
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS friendships (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            friend_id INTEGER NOT NULL,
+            created_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(friend_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+    """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_friendship_pair ON friendships(user_id, friend_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_friendship_user ON friendships(user_id);")
+
+    # =========================================================
+    # 9) challenges 테이블
+    # =========================================================
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS challenges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            category TEXT NOT NULL,       -- 소비절약 | 저축 | 투자공부 | 생활
+            description TEXT,
+            period_days INTEGER NOT NULL DEFAULT 7,
+            created_by INTEGER,           -- users.id, NULL이면 시스템 기본 챌린지
+            created_at TEXT,
+            FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_challenges_category ON challenges(category);")
+
+    # =========================================================
+    # 10) challenge_participants 테이블 (참여 + 누적 점수)
+    # =========================================================
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS challenge_participants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            challenge_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            joined_at TEXT,
+            acorn_score INTEGER NOT NULL DEFAULT 0,   -- 랭킹용 누적 도토리
+            current_streak INTEGER NOT NULL DEFAULT 0,
+            last_checkin_date TEXT,                    -- YYYY-MM-DD, 중복 인증 방지
+            FOREIGN KEY(challenge_id) REFERENCES challenges(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+    """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_participant_pair ON challenge_participants(challenge_id, user_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_participants_user ON challenge_participants(user_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_participants_ranking ON challenge_participants(challenge_id, acorn_score);")
+
+    # =========================================================
+    # 11) challenge_checkins 테이블 (일별 인증 기록)
+    # =========================================================
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS challenge_checkins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            challenge_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            checkin_date TEXT NOT NULL,    -- YYYY-MM-DD
+            created_at TEXT,
+            FOREIGN KEY(challenge_id) REFERENCES challenges(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+    """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_checkin_day ON challenge_checkins(challenge_id, user_id, checkin_date);")
+
     conn.commit()
     conn.close()
+
 
 def now_iso():
     return datetime.now().isoformat(timespec="seconds")

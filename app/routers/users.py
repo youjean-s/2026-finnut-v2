@@ -1,4 +1,6 @@
 import json
+import random
+import string
 from datetime import date
 from typing import Optional, List, Any, Dict
 from fastapi import APIRouter, HTTPException
@@ -6,6 +8,27 @@ from pydantic import BaseModel, Field
 from app.db import get_conn, now_iso
 
 router = APIRouter(tags=["users"])
+
+
+def generate_finnut_id(seed: Optional[str], conn) -> str:
+    """
+    카카오 닉네임(seed) 기반으로 고유 finnut_id 생성.
+    형식: nut_영문숫자닉네임 (+중복 시 숫자 suffix)
+    닉네임이 한글이거나 비어있으면 랜덤 문자열로 대체.
+    """
+    base = "".join(c for c in (seed or "").lower() if c.isascii() and c.isalnum())
+    if not base:
+        base = "".join(random.choices(string.ascii_lowercase + string.digits, k=6))
+
+    cur = conn.cursor()
+    candidate = f"nut_{base}"
+    suffix = 0
+    while True:
+        cur.execute("SELECT 1 FROM users WHERE finnut_id = ?", (candidate,))
+        if cur.fetchone() is None:
+            return candidate
+        suffix += 1
+        candidate = f"nut_{base}{suffix}"
 
 
 # ── 학교 구분 ──
@@ -33,6 +56,7 @@ def _bool_to_int(v: Optional[bool]) -> Optional[int]:
 
 class UserCreate(BaseModel):
     nickname: Optional[str] = None
+    kakao_id: Optional[str] = None        # 카카오 로그인 고유 id
     gender: Optional[str] = None          # "male" | "female" | "other"
     birthdate: Optional[str] = None       # "YYYY-MM-DD"
     income_level: Optional[int] = Field(default=None, ge=1, le=10)  # 소득분위 1~10
@@ -58,6 +82,8 @@ def _row_to_dict(r) -> Dict[str, Any]:
     return {
         "id": r["id"],
         "nickname": r["nickname"],
+        "finnut_id": r["finnut_id"],
+        "acorn_balance": r["acorn_balance"] or 0,
         "gender": r["gender"],
         "birthdate": r["birthdate"],
         "age": _calc_age(r["birthdate"]),   # 생년월일 기준 자동 계산
@@ -81,15 +107,29 @@ def create_user(payload: UserCreate) -> Dict[str, Any]:
     cur = conn.cursor()
     ts = now_iso()
 
+    # 카카오 id가 이미 가입된 유저면 새로 만들지 않고 기존 유저 반환 (재로그인 대비)
+    if payload.kakao_id:
+        cur.execute("SELECT id, finnut_id FROM users WHERE kakao_id = ?", (payload.kakao_id,))
+        existing = cur.fetchone()
+        if existing:
+            conn.close()
+            return {"id": existing["id"], "finnut_id": existing["finnut_id"], "is_new": False}
+
+    finnut_id = generate_finnut_id(payload.nickname, conn)
+    SIGNUP_BONUS_ACORNS = 50
+
     cur.execute("""
         INSERT INTO users (
-            nickname, gender, birthdate, income_level,
+            nickname, kakao_id, finnut_id, acorn_balance, gender, birthdate, income_level,
             region, school, student, keywords_json,
             created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         payload.nickname,
+        payload.kakao_id,
+        finnut_id,
+        SIGNUP_BONUS_ACORNS,
         payload.gender,
         payload.birthdate,
         payload.income_level,
@@ -104,7 +144,7 @@ def create_user(payload: UserCreate) -> Dict[str, Any]:
     conn.commit()
     conn.close()
 
-    return {"id": user_id, "created_at": ts}
+    return {"id": user_id, "finnut_id": finnut_id, "created_at": ts, "is_new": True}
 
 
 @router.get("/users/{user_id}")
@@ -120,6 +160,37 @@ def get_user(user_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="User not found")
 
     return _row_to_dict(r)
+
+
+class AcornAdjust(BaseModel):
+    amount: int
+    mode: str = "add"   # "add" | "set"
+
+
+@router.patch("/users/{user_id}/acorns")
+def adjust_acorns(user_id: int, payload: AcornAdjust) -> Dict[str, Any]:
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT acorn_balance FROM users WHERE id = ?", (user_id,))
+    r = cur.fetchone()
+    if not r:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if payload.mode == "set":
+        new_balance = payload.amount
+    elif payload.mode == "add":
+        new_balance = (r["acorn_balance"] or 0) + payload.amount
+    else:
+        conn.close()
+        raise HTTPException(status_code=400, detail="mode must be 'add' or 'set'")
+
+    new_balance = max(new_balance, 0)
+    cur.execute("UPDATE users SET acorn_balance = ? WHERE id = ?", (new_balance, user_id))
+    conn.commit()
+    conn.close()
+    return {"id": user_id, "acorn_balance": new_balance}
 
 
 @router.patch("/users/{user_id}")

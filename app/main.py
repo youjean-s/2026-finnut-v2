@@ -10,6 +10,9 @@ from app.routers.user_recommendations import router as user_recommendations_rout
 from app.routers.fhi import router as fhi_router
 from app.routers.missions import router as missions_router
 from app.routers.transactions import router as transactions_router   # 추가
+from app.routers.friends import router as friends_router
+from app.routers.challenges import router as challenges_router
+
 app = FastAPI(
     title="FINNUT Backend",
     description="장학금/청년정책 추천 + 금융건강지수(FHI) 분석 통합 API",
@@ -31,6 +34,11 @@ init_db()
 def health_check():
     return {"status": "ok"}
 
+# 친구 (검색/요청/수락) — /users/search가 /users/{user_id}보다 먼저 매칭돼야 함
+app.include_router(friends_router)
+
+# 챌린지
+app.include_router(challenges_router)
 
 # 정책/장학금 관련
 app.include_router(scholarships_router)
