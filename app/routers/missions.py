@@ -1,7 +1,7 @@
 """
 app/routers/missions.py
 ------------------------
-코칭카드 미션 실행 로그 (self-report 방식)
+코칭카드 미션 실행 로그 + 인증(사진/거래내역)
 """
 
 import os
@@ -14,20 +14,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
 
 from app.db import get_conn, now_iso
-
-CATEGORY_TO_VERIFICATION = {
-    "배달/식비": "transaction",
-    # 나머지는 전부 photo (기본값)
-}
-
-CATEGORY_KEYWORDS = {
-    "배달/식비": ["배달의민족", "배민", "요기요", "쿠팡이츠"],
-}
-
-def resolve_verification(category: str):
-    v_type = CATEGORY_TO_VERIFICATION.get(category, "photo")
-    keywords = CATEGORY_KEYWORDS.get(category)
-    return v_type, keywords
+from app.services.mission_verifier import verify_photo, verify_transactions
 
 router = APIRouter(tags=["missions"])
 
@@ -35,6 +22,23 @@ VALID_CATEGORIES = {
     "convenience", "cafe", "food", "transport", "shopping",
     "housing", "entertainment", "subscription", "other"
 }
+
+# category(영문 코드) -> verification_type. 여기 없으면 기본값 'photo'
+CATEGORY_TO_VERIFICATION = {
+    "food": "transaction",  # 배달/식비 절제형 미션
+}
+
+# transaction 타입일 때 거래내역에서 매칭할 가맹점 키워드
+CATEGORY_KEYWORDS = {
+    "food": ["배달의민족", "배민", "요기요", "쿠팡이츠"],
+}
+
+
+def resolve_verification(category: str):
+    v_type = CATEGORY_TO_VERIFICATION.get(category, "photo")
+    keywords = CATEGORY_KEYWORDS.get(category)
+    return v_type, keywords
+
 
 UPLOAD_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "uploads", "mission_photos"
@@ -68,6 +72,34 @@ def _row_to_dict(r) -> Dict[str, Any]:
         "verification_keywords": r["verification_keywords"],
         "created_at": r["created_at"],
     }
+
+
+def _maybe_evaluate_transaction_mission(mission_row, cur) -> None:
+    """
+    transaction 타입 미션이 active 상태이고 기간이 끝났으면
+    조회 시점에 자동으로 성공/실패를 확정짓는다 (lazy evaluation).
+    mission_row는 sqlite3.Row, 커밋은 호출부에서 처리.
+    """
+    if mission_row["verification_type"] != "transaction":
+        return
+    if mission_row["status"] != "active":
+        return
+    if datetime.now().date().isoformat() <= mission_row["period_end"]:
+        return
+
+    keywords = json.loads(mission_row["verification_keywords"]) if mission_row["verification_keywords"] else []
+    result = verify_transactions(
+        user_id=mission_row["user_id"],
+        period_start=mission_row["period_start"],
+        period_end=mission_row["period_end"],
+        keywords=keywords,
+    )
+    new_status = "completed" if result["success"] else "failed"
+    cur.execute(
+        "UPDATE mission_logs SET status = ? WHERE id = ?",
+        (new_status, mission_row["id"]),
+    )
+
 
 @router.post("/missions/create")
 def create_mission(body: MissionCreate) -> Dict[str, Any]:
@@ -109,7 +141,7 @@ async def add_execution(
     photo: UploadFile = File(...),
     note: Optional[str] = Form(default=None),
 ) -> Dict[str, Any]:
-    """사진 업로드 → 실행 기록 추가 (self-report) + 카운트 증가"""
+    """사진 업로드 → Vision LLM 검증 → 통과 시에만 카운트 증가 (photo 타입 미션 전용)"""
     conn = get_conn()
     cur = conn.cursor()
 
@@ -118,6 +150,14 @@ async def add_execution(
     if mission is None:
         conn.close()
         raise HTTPException(status_code=404, detail="미션을 찾을 수 없습니다.")
+
+    if mission["verification_type"] == "transaction":
+        conn.close()
+        raise HTTPException(
+            status_code=400,
+            detail="이 미션은 사진 인증 대상이 아닙니다. 거래내역 기준으로 기간 종료 시 자동 확인됩니다.",
+        )
+
     if mission["status"] != "active":
         conn.close()
         raise HTTPException(status_code=400, detail="이미 종료된 미션입니다.")
@@ -134,10 +174,77 @@ async def add_execution(
     with open(filepath, "wb") as f:
         f.write(await photo.read())
 
+    verification = verify_photo(filepath, mission["card_mission"])
+
     cur.execute(
-        """INSERT INTO mission_executions (mission_log_id, photo_path, note, executed_at)
-           VALUES (?, ?, ?, ?)""",
-        (mission_id, filepath, note, now_iso()),
+        """INSERT INTO mission_executions
+           (mission_log_id, photo_path, note, executed_at, verified, verification_reason, confidence)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (
+            mission_id, filepath, note, now_iso(),
+            1 if verification["success"] else 0,
+            verification.get("reason"),
+            verification.get("confidence"),
+        ),
+    )
+    execution_id = cur.lastrowid
+
+    if verification["success"]:
+        new_count = mission["current_count"] + 1
+        new_status = "completed" if new_count >= mission["target_count"] else "active"
+        cur.execute(
+            "UPDATE mission_logs SET current_count = ?, status = ? WHERE id = ?",
+            (new_count, new_status, mission_id),
+        )
+    conn.commit()
+
+    cur.execute("SELECT * FROM mission_logs WHERE id = ?", (mission_id,))
+    row = cur.fetchone()
+    conn.close()
+
+    result = _row_to_dict(row)
+    result["execution"] = {
+        "id": execution_id,
+        "verified": verification["success"],
+        "verification_reason": verification.get("reason"),
+        "confidence": verification.get("confidence"),
+    }
+    return result
+
+
+@router.post("/missions/{mission_id}/executions/{execution_id}/override")
+def override_execution(mission_id: int, execution_id: int) -> Dict[str, Any]:
+    """사진 검증 실패(fail) 건을 사용자가 수동으로 성공 처리"""
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT * FROM mission_executions WHERE id = ? AND mission_log_id = ?",
+        (execution_id, mission_id),
+    )
+    execution = cur.fetchone()
+    if execution is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="실행 기록을 찾을 수 없습니다.")
+
+    if execution["verified"] == 1:
+        conn.close()
+        raise HTTPException(status_code=400, detail="이미 인증된 기록입니다.")
+
+    cur.execute("SELECT * FROM mission_logs WHERE id = ?", (mission_id,))
+    mission = cur.fetchone()
+    if mission is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="미션을 찾을 수 없습니다.")
+    if mission["status"] != "active":
+        conn.close()
+        raise HTTPException(status_code=400, detail="이미 종료된 미션입니다.")
+
+    cur.execute(
+        """UPDATE mission_executions
+           SET verified = 1, verification_reason = ?, confidence = 'override'
+           WHERE id = ?""",
+        (f"(수동 확인) {execution['verification_reason'] or ''}".strip(), execution_id),
     )
 
     new_count = mission["current_count"] + 1
@@ -160,9 +267,16 @@ def get_mission(mission_id: int) -> Dict[str, Any]:
     cur = conn.cursor()
     cur.execute("SELECT * FROM mission_logs WHERE id = ?", (mission_id,))
     row = cur.fetchone()
-    conn.close()
     if row is None:
+        conn.close()
         raise HTTPException(status_code=404, detail="미션을 찾을 수 없습니다.")
+
+    _maybe_evaluate_transaction_mission(row, cur)
+    conn.commit()
+
+    cur.execute("SELECT * FROM mission_logs WHERE id = ?", (mission_id,))
+    row = cur.fetchone()
+    conn.close()
     return _row_to_dict(row)
 
 
@@ -170,6 +284,15 @@ def get_mission(mission_id: int) -> Dict[str, Any]:
 def list_user_missions(user_id: int, status: Optional[str] = None) -> List[Dict[str, Any]]:
     conn = get_conn()
     cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM mission_logs WHERE user_id = ? ORDER BY created_at DESC", (user_id,)
+    )
+    rows = cur.fetchall()
+
+    for row in rows:
+        _maybe_evaluate_transaction_mission(row, cur)
+    conn.commit()
+
     if status:
         cur.execute(
             "SELECT * FROM mission_logs WHERE user_id = ? AND status = ? ORDER BY created_at DESC",
