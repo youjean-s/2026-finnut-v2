@@ -1,0 +1,14 @@
+{
+  "n_train_rows": 252,
+  "n_held_in_rows": 48,
+  "n_held_out_rows": 60,
+  "n_features": 20,
+  "held_in": {
+    "mae": 9.360791261211824,
+    "rmse": 12.131185093656914
+  },
+  "held_out_setA": {
+    "mae": 10.170584342147931,
+    "rmse": 14.561680897359617
+  }
+}
